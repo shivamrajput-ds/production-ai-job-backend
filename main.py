@@ -1,5 +1,6 @@
 from fastapi import FastAPI, status, HTTPException
 from pydantic import BaseModel
+from typing import Dict,Literal
 import json
 
 
@@ -7,8 +8,19 @@ class JobCreate(BaseModel):
     name: str
     model_name: str
     
+class JobResponse(BaseModel):
+    job_id: int
+    name: str
+    model_name: str
+    status: str  
+       
+
+class JobActionResponse(BaseModel):
+    message: str
+    job: JobResponse
+    
 class JobUpdate(BaseModel):
-    status: str        
+    status: Literal["pending", "running", "completed", "failed"]       
 
 
 app = FastAPI()
@@ -31,7 +43,7 @@ def home():
 def health():
     return {"status": "ok"}
 
-@app.post("/jobs",status_code=status.HTTP_201_CREATED)
+@app.post("/jobs",status_code=status.HTTP_201_CREATED,response_model= JobActionResponse)
 def create_jobs(job:JobCreate):
     data = load_data()
     
@@ -57,12 +69,12 @@ def create_jobs(job:JobCreate):
     "job": message
 }
     
-@app.get("/jobs")
+@app.get("/jobs",response_model= Dict[str,JobResponse])
 def get_jobs():
     data = load_data()
     return data    
 
-@app.get("/jobs/{job_id}",status_code = status.HTTP_200_OK)
+@app.get("/jobs/{job_id}",status_code = status.HTTP_200_OK,response_model = JobResponse)
 def get_job(job_id: int):
     data = load_data()
     
@@ -91,32 +103,24 @@ def delete_job(job_id: int):
 
     return {"message": "Succesfully Deleted"}    
 
-@app.patch("/jobs/{job_id}")
-def update_status(job_id:int,x: JobUpdate):
+@app.patch("/jobs/{job_id}", response_model=JobActionResponse)
+def update_status(job_id: int, x: JobUpdate):
     data = load_data()
-    valid = {"pending","running","completed","failed"}
-    message = None
-    
+
     if str(job_id) in data:
-        if x.status in valid:
-            data[str(job_id)]["status"] = x.status
-            message = data[str(job_id)]
-            
-        else:
-            raise HTTPException(
-                        detail="Please Enter valid Status",
-                        status_code=status.HTTP_400_BAD_REQUEST
-                        )          
+        data[str(job_id)]["status"] = x.status
+        message = data[str(job_id)]
+
     else:
         raise HTTPException(
             detail="Id Not Found",
             status_code=status.HTTP_404_NOT_FOUND
-            )
-    
+        )
+
     dump_data(data)
-    
+
     return {
-  "message": "Job updated successfully",
-  "job": message
-}
+        "message": "Job updated successfully",
+        "job": message
+    }
     
