@@ -1,20 +1,41 @@
 # Production AI Job Processing Backend
 
-A progressively built, production-oriented backend for managing **AI/ML processing jobs** using FastAPI.
+A progressively built **FastAPI backend for managing AI/ML processing jobs**, developed with a build-first approach to backend engineering.
 
-This project is being developed from the ground up with a **build-first backend engineering approach**. Instead of learning backend concepts as isolated theory, each concept is introduced by implementing it inside one continuously evolving system.
+Rather than learning backend concepts as disconnected theory, this project evolves one production-style system step by step—from basic API routes to validation, persistence, modular architecture, databases, authentication, background processing, testing, caching, and deployment.
 
-The backend currently supports persistent job creation, retrieval, updates, deletion, request validation, response schemas, HTTP error handling, and interactive API documentation.
-
-> **Current status:** Core JSON-backed job CRUD API and Pydantic request/response contracts are implemented. PostgreSQL and a cleaner multi-module architecture will be introduced as the project grows.
+> **Current status:** Modular FastAPI application with JSON-backed job CRUD, Pydantic request/response contracts, job lifecycle validation, error handling, and OpenAPI documentation.
 
 ---
 
-## Project Goal
+## Overview
 
-The long-term goal is to build a backend architecture suitable for real AI/ML applications where clients can create processing jobs, upload files, monitor execution, retrieve results, and manage authenticated resources.
+AI/ML applications often need much more than a model.
 
-The system will gradually evolve toward a workflow like:
+A real system may need to:
+
+* accept processing requests
+* validate input
+* create and track jobs
+* persist state
+* expose job status
+* handle failures
+* process files
+* run long-running work asynchronously
+* authenticate users
+* store results
+* support retries
+* scale safely
+
+This project is being built to understand those backend responsibilities through implementation.
+
+The current system focuses on **job management**, while later stages will introduce PostgreSQL, authentication, file processing, workers, Redis, testing, and containerization.
+
+---
+
+## Long-Term Architecture
+
+The backend will gradually evolve toward a workflow similar to:
 
 ```text
 Client
@@ -26,10 +47,10 @@ FastAPI API
   ├── Authorization
   ├── Projects
   ├── File Uploads
-  └── Job Creation
+  └── Job Management
           │
           ▼
-      Persistent Database
+      PostgreSQL
           │
           ▼
        Job Queue
@@ -47,38 +68,168 @@ FastAPI API
  Job Status / Result API
 ```
 
-The AI/ML processing itself will initially remain lightweight so that the main focus stays on **backend architecture, reliability, validation, persistence, testing, and production engineering**.
+The AI/ML processing itself will initially remain lightweight so that the main focus stays on **backend architecture, reliability, persistence, validation, testing, and production engineering**.
 
 ---
 
-# Current Features
+# Current Capabilities
+
+The backend currently supports:
 
 * FastAPI application setup
+* Modular application structure
+* `APIRouter`-based job routing
 * Health-check endpoint
-* REST-style job resource endpoints
-* JSON request bodies
+* Job creation
+* Job listing
+* Individual job retrieval
+* Job status updates
+* Job deletion
+* Generated job IDs
+* JSON-based persistent storage
 * Pydantic request validation
 * Pydantic response models
-* Nested response schemas
-* Automatic OpenAPI schema generation
-* Generated job IDs
-* Persistent JSON-based storage
-* Create job
-* List all jobs
-* Retrieve job by ID
-* Update job status
-* Delete job
-* Allowed job-status validation
+* Nested response models
+* Typed collection responses
+* Job lifecycle validation with `Literal`
+* Automatic request validation
 * `201 Created`
-* `400 Bad Request` concepts
 * `404 Not Found`
 * Automatic `422 Unprocessable Entity`
 * FastAPI `HTTPException`
-* Swagger UI and ReDoc documentation
+* Swagger UI
+* ReDoc
+* Automatic OpenAPI schema generation
 
 ---
 
-# Current API
+# Current Project Structure
+
+```text
+production-ai-job-backend/
+│
+├── main.py
+├── routes.py
+├── schemas.py
+├── storage.py
+├── data.json
+├── README.md
+├── pyproject.toml
+├── uv.lock
+└── .gitignore
+```
+
+Each module now has a clearer responsibility.
+
+### `main.py`
+
+Application entry point.
+
+Currently responsible for:
+
+* creating the FastAPI application
+* registering the job router
+* root endpoint
+* health-check endpoint
+
+Conceptually:
+
+```text
+main.py
+   │
+   ├── create FastAPI app
+   ├── include job router
+   └── expose application-level endpoints
+```
+
+---
+
+### `routes.py`
+
+Contains job-related API endpoints.
+
+```text
+POST   /jobs
+GET    /jobs
+GET    /jobs/{job_id}
+PATCH  /jobs/{job_id}
+DELETE /jobs/{job_id}
+```
+
+The routes are grouped using FastAPI's `APIRouter`.
+
+Conceptually:
+
+```text
+APIRouter
+    │
+    └── /jobs
+          ├── POST
+          ├── GET
+          ├── GET /{job_id}
+          ├── PATCH /{job_id}
+          └── DELETE /{job_id}
+```
+
+---
+
+### `schemas.py`
+
+Contains the Pydantic request and response contracts used by the API.
+
+Current schemas include:
+
+```text
+JobCreate
+JobResponse
+JobActionResponse
+JobUpdate
+```
+
+This keeps API data contracts separate from route logic.
+
+---
+
+### `storage.py`
+
+Contains JSON persistence helpers.
+
+Responsibilities:
+
+```text
+load_data()
+dump_data()
+```
+
+This prevents file I/O logic from being repeated directly inside the application entry point.
+
+---
+
+### `data.json`
+
+Temporary persistent storage for jobs.
+
+JSON is intentionally being used before introducing PostgreSQL so that persistence, CRUD operations, resource IDs, and state changes can be understood without immediately hiding them behind an ORM.
+
+---
+
+# API Endpoints
+
+## Root
+
+```http
+GET /
+```
+
+Example response:
+
+```json
+{
+  "message": "Welcome to FastAPI"
+}
+```
+
+---
 
 ## Health Check
 
@@ -102,7 +253,7 @@ Response:
 POST /jobs
 ```
 
-Request body:
+### Request
 
 ```json
 {
@@ -111,7 +262,7 @@ Request body:
 }
 ```
 
-Example response:
+### Response
 
 ```json
 {
@@ -131,7 +282,7 @@ Successful creation returns:
 201 Created
 ```
 
-New jobs automatically receive:
+Every new job automatically receives:
 
 * a generated `job_id`
 * an initial status of `pending`
@@ -163,20 +314,22 @@ Example response:
 }
 ```
 
-The endpoint uses the response contract:
+The response contract is:
 
 ```python
 dict[str, JobResponse]
 ```
 
-This means:
+Meaning:
 
-* dictionary keys are job IDs stored as strings
-* every dictionary value must match the `JobResponse` schema
+```text
+dictionary key   → job ID represented as a string
+dictionary value → validated JobResponse object
+```
 
 ---
 
-## Retrieve a Job
+## Retrieve Job
 
 ```http
 GET /jobs/{job_id}
@@ -188,7 +341,7 @@ Example:
 GET /jobs/5
 ```
 
-Successful response:
+Response:
 
 ```json
 {
@@ -205,7 +358,7 @@ If the requested job does not exist:
 404 Not Found
 ```
 
-Response:
+Example error:
 
 ```json
 {
@@ -227,7 +380,7 @@ Example:
 PATCH /jobs/5
 ```
 
-Request body:
+### Request
 
 ```json
 {
@@ -235,7 +388,7 @@ Request body:
 }
 ```
 
-Response:
+### Response
 
 ```json
 {
@@ -249,30 +402,7 @@ Response:
 }
 ```
 
-Currently supported job states are:
-
-```text
-pending
-running
-completed
-failed
-```
-
-Invalid values are rejected automatically by Pydantic before the route's update logic executes.
-
-For example:
-
-```json
-{
-  "status": "banana"
-}
-```
-
-returns:
-
-```text
-422 Unprocessable Entity
-```
+A PATCH request is used because only part of the existing job resource is being changed.
 
 ---
 
@@ -282,17 +412,15 @@ returns:
 DELETE /jobs/{job_id}
 ```
 
-If the job exists, it is removed from persistent storage.
+The endpoint:
 
-Example response:
+1. loads persistent job data
+2. verifies the requested job exists
+3. removes it
+4. persists the modified data
+5. returns a success response
 
-```json
-{
-  "message": "Successfully Deleted"
-}
-```
-
-If the requested job does not exist:
+If the requested ID does not exist:
 
 ```text
 404 Not Found
@@ -300,11 +428,62 @@ If the requested job does not exist:
 
 ---
 
+# Job Lifecycle
+
+Jobs currently support four states:
+
+```text
+pending
+running
+completed
+failed
+```
+
+The update schema restricts status to these values.
+
+```python
+class JobUpdate(BaseModel):
+    status: Literal[
+        "pending",
+        "running",
+        "completed",
+        "failed",
+    ]
+```
+
+For example, this is valid:
+
+```json
+{
+  "status": "running"
+}
+```
+
+But this:
+
+```json
+{
+  "status": "banana"
+}
+```
+
+is automatically rejected.
+
+FastAPI/Pydantic returns:
+
+```text
+422 Unprocessable Entity
+```
+
+The invalid request is rejected **before the route's update logic executes**.
+
+---
+
 # Pydantic Schemas
 
-The API currently separates incoming and outgoing data contracts.
+## `JobCreate`
 
-## Job Creation Request
+Defines the request body required to create a new job.
 
 ```python
 class JobCreate(BaseModel):
@@ -312,17 +491,23 @@ class JobCreate(BaseModel):
     model_name: str
 ```
 
-This schema validates the incoming body for:
+Both fields are required.
 
-```http
-POST /jobs
+Example invalid request:
+
+```json
+{
+  "name": "Test job"
+}
 ```
 
-Both fields are required.
+Because `model_name` is missing, request validation fails automatically.
 
 ---
 
-## Job Response
+## `JobResponse`
+
+Defines the public representation of a job returned by the API.
 
 ```python
 class JobResponse(BaseModel):
@@ -332,19 +517,22 @@ class JobResponse(BaseModel):
     status: str
 ```
 
-This defines the structure of a job returned by the API.
+Example:
 
-It is used for endpoints such as:
-
-```http
-GET /jobs/{job_id}
+```json
+{
+  "job_id": 5,
+  "name": "Fraud detection training",
+  "model_name": "fraud-detector-v1",
+  "status": "pending"
+}
 ```
-
-and inside collection/nested responses.
 
 ---
 
-## Job Action Response
+## `JobActionResponse`
+
+Reusable nested response schema for operations that return a message together with a job.
 
 ```python
 class JobActionResponse(BaseModel):
@@ -352,14 +540,14 @@ class JobActionResponse(BaseModel):
     job: JobResponse
 ```
 
-This is a nested response model reused by job actions such as:
+Currently used for operations such as:
 
-```http
-POST /jobs
+```text
+POST  /jobs
 PATCH /jobs/{job_id}
 ```
 
-Example shape:
+Example structure:
 
 ```json
 {
@@ -375,7 +563,9 @@ Example shape:
 
 ---
 
-## Job Status Update
+## `JobUpdate`
+
+Defines the allowed job status update request.
 
 ```python
 class JobUpdate(BaseModel):
@@ -383,74 +573,84 @@ class JobUpdate(BaseModel):
         "pending",
         "running",
         "completed",
-        "failed"
+        "failed",
     ]
 ```
 
-Using `Literal` moves status validation into the request schema instead of manually checking values inside the route.
-
-This keeps the endpoint logic smaller and ensures invalid requests are rejected before business logic executes.
+This moves validation away from manually written route checks and into the API schema.
 
 ---
 
-# Request vs Response Models
+# Request and Response Contracts
 
-The project now distinguishes between what the client **sends** and what the API **returns**.
+The project distinguishes between incoming request data and outgoing response data.
 
 ```text
-Client Request
-      │
-      ▼
-JobCreate / JobUpdate
-      │
-      ▼
+Client
+  │
+  ▼
+Request Schema
+  │
+  ▼
 FastAPI Route
-      │
-      ▼
+  │
+  ▼
 Application Logic
-      │
-      ▼
-JobResponse / JobActionResponse
-      │
-      ▼
-Client Response
+  │
+  ▼
+Response Schema
+  │
+  ▼
+Client
 ```
 
 Examples:
 
 ```text
 POST /jobs
-Request  → JobCreate
-Response → JobActionResponse
+
+Request:
+JobCreate
+
+Response:
+JobActionResponse
 ```
 
 ```text
 GET /jobs/{job_id}
-Response → JobResponse
+
+Response:
+JobResponse
 ```
 
 ```text
 GET /jobs
-Response → dict[str, JobResponse]
+
+Response:
+dict[str, JobResponse]
 ```
 
 ```text
 PATCH /jobs/{job_id}
-Request  → JobUpdate
-Response → JobActionResponse
+
+Request:
+JobUpdate
+
+Response:
+JobActionResponse
 ```
 
-Response models are not used only for documentation. They also define and validate the structure that the API exposes to clients.
+Response models do more than improve Swagger documentation.
+
+They create an explicit contract for what the API exposes to its clients and allow FastAPI to validate the outgoing response structure.
 
 ---
 
 # Validation and Error Handling
 
-The backend currently demonstrates several HTTP failure scenarios.
+## Missing Required Field
 
-## Missing Request Field
-
-Example:
+Request:
 
 ```json
 {
@@ -458,17 +658,19 @@ Example:
 }
 ```
 
-If `model_name` is required but missing, FastAPI/Pydantic rejects the request automatically:
+If `model_name` is required but missing:
 
 ```text
 422 Unprocessable Entity
 ```
 
+FastAPI rejects the request automatically through Pydantic validation.
+
 ---
 
-## Invalid Status
+## Invalid Job Status
 
-Example:
+Request:
 
 ```json
 {
@@ -476,16 +678,7 @@ Example:
 }
 ```
 
-Because the request model only allows:
-
-```text
-pending
-running
-completed
-failed
-```
-
-Pydantic rejects the request automatically:
+Because `banana` is not an allowed `Literal` value:
 
 ```text
 422 Unprocessable Entity
@@ -509,7 +702,7 @@ If job `999` does not exist:
 404 Not Found
 ```
 
-This is handled using FastAPI's:
+The application handles this using:
 
 ```python
 HTTPException
@@ -517,9 +710,9 @@ HTTPException
 
 ---
 
-# Current Persistence
+# Persistence
 
-Jobs are currently persisted in:
+Jobs currently survive server restarts because they are persisted in:
 
 ```text
 data.json
@@ -544,15 +737,17 @@ Example:
 }
 ```
 
-The application currently uses two small persistence helpers.
+---
 
-Reading data:
+## Reading Stored Data
+
+The storage layer uses:
 
 ```python
 json.load(...)
 ```
 
-Flow:
+Conceptually:
 
 ```text
 data.json
@@ -560,13 +755,17 @@ data.json
 Python dictionary
 ```
 
-Writing data:
+---
+
+## Writing Stored Data
+
+The storage layer uses:
 
 ```python
 json.dump(...)
 ```
 
-Flow:
+Conceptually:
 
 ```text
 Python dictionary
@@ -574,174 +773,238 @@ Python dictionary
 data.json
 ```
 
-The typical mutation flow is:
+---
+
+## Mutation Flow
+
+Operations that change state follow a simple flow:
 
 ```text
-Load
-  ↓
-Modify
-  ↓
-Persist
-  ↓
-Return Response
+Load existing state
+        ↓
+Validate resource
+        ↓
+Modify state
+        ↓
+Persist updated state
+        ↓
+Return response
 ```
 
 For example:
 
 ```text
 PATCH /jobs/5
-     ↓
+      ↓
 load_data()
-     ↓
+      ↓
 find job
-     ↓
-update status
-     ↓
+      ↓
+change status
+      ↓
 dump_data()
-     ↓
+      ↓
 return updated job
 ```
 
 ---
 
-# Why JSON Storage for Now?
+# Why JSON Storage Is Temporary
 
-JSON persistence is intentionally temporary.
+JSON is useful at this stage because it makes persistence visible and understandable.
 
-It provides a simple environment for understanding:
+It provides hands-on practice with:
 
-* process memory vs persistent state
-* resource IDs
-* reads and writes
+* application state
+* persistence
+* serialization
+* resource identifiers
 * CRUD operations
-* state changes
+* state mutation
 * missing resources
-* persistence after server restarts
-* API contracts
+* server restarts
+* response contracts
 
-without introducing an ORM and database session management too early.
+without introducing database abstraction too early.
 
-The project will later migrate to:
+The planned progression is:
 
 ```text
+JSON
+  ↓
 PostgreSQL
-    +
+  ↓
 SQLAlchemy
-    +
+  ↓
 Alembic
 ```
 
 ---
 
-# Current Storage Limitations
+# Limitations of the Current Storage Layer
 
-The current JSON implementation is suitable for learning but is **not intended as production database storage**.
+The JSON implementation is suitable for learning but **not suitable as a production database**.
 
-Potential limitations include:
+Important limitations include:
 
-* concurrent writes
+* unsafe concurrent writes
 * race conditions
-* file corruption during failures
-* inefficient lookup at larger scale
 * lack of transactions
-* weak query capabilities
+* possible file corruption during failures
+* inefficient large-scale querying
+* no relationships
 * no relational constraints
-* no database indexes
+* no indexes
+* weak filtering capabilities
+* poor multi-process coordination
 
-These limitations create the natural motivation for introducing PostgreSQL later.
-
----
-
-# Current Project Structure
-
-The project is intentionally still small:
-
-```text
-production-ai-job-backend/
-│
-├── main.py
-├── data.json
-├── pyproject.toml
-├── uv.lock
-├── README.md
-└── .gitignore
-```
-
-The backend is deliberately **not over-engineered** at this stage.
-
-As the application grows, responsibilities will gradually be separated into modules.
-
-A future structure may evolve toward:
-
-```text
-app/
-├── main.py
-├── api/
-├── core/
-├── db/
-├── models/
-├── schemas/
-├── repositories/
-├── services/
-└── tests/
-```
-
-These layers will be introduced only when the current code creates a genuine need for them.
+These limitations provide the natural motivation for introducing PostgreSQL.
 
 ---
 
-# Tech Stack
+# Why the Application Was Split Into Modules
 
-## Current
+The project originally started with most logic in `main.py`.
+
+As functionality increased, the file started containing multiple responsibilities:
+
+```text
+main.py
+├── schemas
+├── storage logic
+├── job routes
+├── health route
+└── application setup
+```
+
+The project has now been refactored to:
+
+```text
+main.py
+   ↓
+Application assembly
+
+routes.py
+   ↓
+Job API endpoints
+
+schemas.py
+   ↓
+Request / response contracts
+
+storage.py
+   ↓
+Persistence helpers
+```
+
+This is an early step toward separation of concerns.
+
+The system has **not** yet introduced service and repository layers because the current complexity does not justify them.
+
+The architecture will continue evolving only when new responsibilities create a genuine need.
+
+---
+
+# APIRouter
+
+Job endpoints are now grouped using FastAPI's `APIRouter`.
+
+The job router uses the common:
+
+```text
+/jobs
+```
+
+resource prefix.
+
+Conceptually:
+
+```text
+/jobs
+  │
+  ├── POST
+  ├── GET
+  └── /{job_id}
+         ├── GET
+         ├── PATCH
+         └── DELETE
+```
+
+The router is registered with the main FastAPI application using:
+
+```python
+app.include_router(router)
+```
+
+This allows `main.py` to focus on assembling the application rather than containing every endpoint directly.
+
+---
+
+# Current Tech Stack
+
+## Backend
 
 * Python
 * FastAPI
 * Pydantic
 * Uvicorn
+
+## Persistence
+
 * JSON
+
+## Project Management
+
 * uv
 * Git
+* GitHub
 
-## Planned
+---
+
+# Planned Technologies
+
+Future stages are expected to introduce technologies only when their need becomes clear.
+
+Planned components include:
 
 * PostgreSQL
 * SQLAlchemy
 * Alembic
+* secure password hashing
 * JWT authentication
-* Password hashing
 * Redis
-* Background workers
-* Task queues
+* background workers
+* task queues
 * Pytest
 * HTTPX
-* Structured logging
+* Python logging
 * Docker
 * Docker Compose
 
 ---
 
-# Run Locally
+# Running Locally
 
-## 1. Clone the repository
+## 1. Clone the Repository
 
 ```bash
 git clone <repository-url>
 cd production-ai-job-backend
 ```
 
-## 2. Install dependencies
+## 2. Install Dependencies
 
 ```bash
 uv sync
 ```
 
-## 3. Start the development server
+## 3. Start the Development Server
 
 ```bash
 uv run fastapi dev main.py
 ```
 
-The API will be available at:
+The API will normally be available at:
 
 ```text
 http://127.0.0.1:8000
@@ -749,9 +1012,9 @@ http://127.0.0.1:8000
 
 ---
 
-# Interactive API Documentation
+# API Documentation
 
-FastAPI automatically generates OpenAPI documentation.
+FastAPI automatically generates OpenAPI documentation from the routes and Pydantic schemas.
 
 ## Swagger UI
 
@@ -759,17 +1022,20 @@ FastAPI automatically generates OpenAPI documentation.
 http://127.0.0.1:8000/docs
 ```
 
-Swagger can currently be used to:
+Swagger can be used to:
 
+* inspect endpoints
 * inspect request schemas
 * inspect response schemas
 * create jobs
-* retrieve jobs
 * list jobs
-* update statuses
+* retrieve jobs
+* update job status
 * delete jobs
-* observe HTTP status codes
+* observe status codes
 * test validation failures
+
+---
 
 ## ReDoc
 
@@ -781,9 +1047,9 @@ http://127.0.0.1:8000/redoc
 
 # Development Roadmap
 
-## Stage 1 — API Fundamentals
+## Stage 1 — FastAPI Fundamentals
 
-* [x] FastAPI application
+* [x] FastAPI application setup
 * [x] GET endpoints
 * [x] POST endpoints
 * [x] PATCH endpoints
@@ -791,10 +1057,10 @@ http://127.0.0.1:8000/redoc
 * [x] Path parameters
 * [x] Request bodies
 * [x] HTTP status codes
-* [x] Pydantic request validation
+* [x] Pydantic validation
 * [x] Response models
 * [x] Nested response models
-* [x] Basic error handling
+* [x] HTTP exceptions
 * [x] OpenAPI / Swagger documentation
 
 ---
@@ -803,7 +1069,7 @@ http://127.0.0.1:8000/redoc
 
 * [x] Job creation
 * [x] Generated job IDs
-* [x] Persistent temporary storage
+* [x] Temporary persistent storage
 * [x] Retrieve job by ID
 * [x] List all jobs
 * [x] Update job status
@@ -815,29 +1081,36 @@ http://127.0.0.1:8000/redoc
 
 ---
 
-## Stage 3 — Clean Architecture
+## Stage 3 — Modular Application Structure
 
-* [ ] APIRouter
-* [ ] Modular application structure
-* [ ] Schema separation
+* [x] `APIRouter`
+* [x] Route separation
+* [x] Schema separation
+* [x] Storage separation
+* [x] Router registration in application entry point
 * [ ] Service layer
 * [ ] Repository/data-access layer
 * [ ] Central configuration
-* [ ] Avoid giant application modules
+* [ ] Application package structure
+* [ ] Reusable dependencies
 
 ---
 
 ## Stage 4 — PostgreSQL
 
 * [ ] PostgreSQL integration
-* [ ] SQLAlchemy models
 * [ ] Database engine
 * [ ] Database sessions
-* [ ] CRUD operations
+* [ ] SQLAlchemy ORM models
+* [ ] Inserts
+* [ ] Queries
+* [ ] Updates
+* [ ] Deletes
 * [ ] Filtering
 * [ ] Sorting
 * [ ] Pagination
 * [ ] Relationships
+* [ ] Foreign keys
 * [ ] Unique constraints
 * [ ] Transactions
 * [ ] Indexes
@@ -855,72 +1128,144 @@ http://127.0.0.1:8000/redoc
 
 ---
 
-## Stage 6 — Authentication & Authorization
+## Stage 6 — Configuration
 
+* [ ] Environment variables
+* [ ] `.env`
+* [ ] Settings model
+* [ ] Database URL configuration
+* [ ] Development vs production settings
+* [ ] Secret management
+
+---
+
+## Stage 7 — Authentication
+
+* [ ] User model
 * [ ] User registration
 * [ ] Password hashing
 * [ ] Login
 * [ ] JWT access tokens
 * [ ] Token expiration
-* [ ] Protected routes
 * [ ] Current-user dependency
-* [ ] Resource ownership
-* [ ] Role-based permissions
-* [ ] `401` vs `403`
+* [ ] Protected endpoints
 
 ---
 
-## Stage 7 — AI/ML Job Workflow
+## Stage 8 — Authorization
+
+* [ ] Resource ownership
+* [ ] User-specific jobs
+* [ ] Roles
+* [ ] Admin permissions
+* [ ] `401 Unauthorized`
+* [ ] `403 Forbidden`
+
+---
+
+## Stage 9 — File Processing
 
 * [ ] File uploads
+* [ ] `UploadFile`
 * [ ] File validation
+* [ ] Extension validation
+* [ ] Size limits
+* [ ] Safe filenames
 * [ ] File-to-job association
-* [ ] Background processing
-* [ ] Worker architecture
-* [ ] Job lifecycle states
-* [ ] Job results
-* [ ] Failure tracking
-* [ ] Retry-safe processing
+* [ ] Persistent file storage strategy
+
+---
+
+## Stage 10 — Background Job Processing
+
+* [ ] FastAPI background tasks
+* [ ] Long-running processing flow
+* [ ] Worker concept
+* [ ] External task queue
+* [ ] Job status transitions
+* [ ] Result persistence
+* [ ] Worker failures
+* [ ] Retries
 * [ ] Idempotency
 
 ---
 
-## Stage 8 — Production Engineering
+## Stage 11 — Redis and Caching
 
-* [ ] Environment-based configuration
-* [ ] Logging
-* [ ] Middleware
-* [ ] Request IDs
-* [ ] Redis
-* [ ] Caching
-* [ ] External API integration
-* [ ] Async I/O
-* [ ] Rate limiting
-* [ ] Security improvements
-* [ ] Retry handling
+* [ ] Redis connection
+* [ ] Cache keys
+* [ ] TTL
+* [ ] Cache hit
+* [ ] Cache miss
+* [ ] Cache invalidation
+* [ ] Appropriate endpoint caching
 
 ---
 
-## Stage 9 — Testing
+## Stage 12 — Logging and Middleware
+
+* [ ] Python logging
+* [ ] Structured messages
+* [ ] Exception logging
+* [ ] Request timing
+* [ ] Request IDs
+* [ ] CORS
+* [ ] Middleware request/response flow
+
+---
+
+## Stage 13 — Testing
 
 * [ ] Pytest setup
-* [ ] API tests
+* [ ] FastAPI API tests
 * [ ] Unit tests
+* [ ] Integration tests
 * [ ] Validation tests
 * [ ] CRUD tests
 * [ ] Failure-path tests
-* [ ] Authentication tests
-* [ ] Database tests
+* [ ] Test database
 * [ ] Fixtures
-* [ ] Mocked external services
+* [ ] Authentication tests
+* [ ] Mocking external services
 
 ---
 
-## Stage 10 — Deployment Readiness
+## Stage 14 — External Services and Async I/O
+
+* [ ] HTTPX
+* [ ] External API calls
+* [ ] Timeouts
+* [ ] Error handling
+* [ ] Retries
+* [ ] `async def`
+* [ ] `await`
+* [ ] Blocking vs non-blocking I/O
+
+---
+
+## Stage 15 — Security
+
+* [ ] Secure password handling
+* [ ] Authentication
+* [ ] Authorization
+* [ ] Input validation
+* [ ] Secret protection
+* [ ] SQL injection awareness
+* [ ] CORS configuration
+* [ ] Secure file uploads
+* [ ] Sensitive logging prevention
+* [ ] Rate limiting
+
+---
+
+## Stage 16 — Docker and Deployment
 
 * [ ] Dockerfile
+* [ ] `.dockerignore`
+* [ ] Containerized FastAPI
 * [ ] Docker Compose
-* [ ] FastAPI + PostgreSQL + Redis
+* [ ] PostgreSQL service
+* [ ] Redis service
 * [ ] Environment variables
 * [ ] Health/readiness checks
 * [ ] CI pipeline
@@ -930,30 +1275,53 @@ http://127.0.0.1:8000/redoc
 
 # Engineering Principles
 
-This project follows several core engineering rules:
+This project follows several engineering rules.
 
-* **Build before over-engineering**
-* Understand code before abstracting it
-* Introduce architecture only when complexity justifies it
-* Validate input at API boundaries
-* Define explicit API response contracts
-* Return meaningful HTTP status codes
-* Keep resource behaviour predictable
-* Persist important state outside process memory
-* Treat failures as expected backend scenarios
-* Keep code testable
-* Never commit secrets
-* Prefer clear engineering over unnecessary complexity
+### Build before abstracting
+
+Architecture is introduced because the code creates a need for it—not because a complicated folder structure looks impressive.
+
+### Understand before automating
+
+Every new library or abstraction should solve a problem that is already understood.
+
+### Explicit API contracts
+
+Incoming and outgoing data should have predictable structures.
+
+### Validate at boundaries
+
+Invalid input should be rejected as early as practical.
+
+### Persist important state
+
+Application state that must survive restarts should not exist only in process memory.
+
+### Treat failures as normal
+
+Missing resources, malformed input, database failures, worker crashes, and network failures are normal backend scenarios.
+
+### Prefer clear code
+
+Working code is not automatically maintainable code.
+
+### Keep components testable
+
+Application design should gradually make it easier to test individual responsibilities.
+
+### Never commit secrets
+
+Credentials, database passwords, API keys, and other secrets must remain outside version control.
+
+### Avoid premature complexity
+
+A correctly engineered monolith is preferable to an architecture that cannot be explained or maintained.
 
 ---
 
-# What This Project Is Not
+# Development Philosophy
 
-This is not intended to be a collection of unrelated FastAPI tutorial snippets.
-
-It is one continuously evolving backend system.
-
-The progression is intentional:
+The project follows this progression:
 
 ```text
 Routes
@@ -966,11 +1334,17 @@ Persistence
   ↓
 Response Contracts
   ↓
-Clean Architecture
+Modular Structure
   ↓
-PostgreSQL
+Database
+  ↓
+Migrations
+  ↓
+Configuration
   ↓
 Authentication
+  ↓
+Authorization
   ↓
 File Processing
   ↓
@@ -987,66 +1361,71 @@ Docker
 Production-Oriented Backend
 ```
 
+Each layer is introduced only after the previous one is understood.
+
 ---
 
 # Learning Focus
 
-The project is especially focused on backend engineering skills useful for:
+The project is particularly relevant to backend engineering for:
 
 * AI/ML applications
 * Data Science platforms
 * model-processing services
-* document-processing systems
+* Applied AI systems
+* document-processing platforms
 * RAG applications
-* Applied AI products
-* asynchronous job APIs
-* ML inference and processing backends
+* ML inference APIs
+* asynchronous AI workloads
+* workflow and job-processing systems
 
-The objective is not merely to memorize FastAPI syntax.
+The objective is not simply to learn FastAPI syntax.
 
 The goal is to become capable of independently:
 
 * designing APIs
-* defining request/response contracts
-* validating input
+* defining request contracts
+* defining response contracts
+* validating inputs
+* choosing HTTP methods
+* selecting status codes
+* implementing CRUD operations
 * managing persistent state
-* implementing CRUD behaviour
-* selecting correct status codes
-* debugging API failures
 * handling errors
-* structuring backend code
-* testing endpoints
-* reasoning about production failure scenarios
+* structuring Python backend projects
+* understanding database interactions
+* debugging failures
+* writing tests
+* integrating external services
+* reasoning about concurrency
+* containerizing services
+* thinking about production failure scenarios
 
 ---
 
-# Current Learning Milestone
+# Current Milestone
 
-The project has moved beyond simple FastAPI route demonstrations.
+The project has progressed from a single-file FastAPI experiment into a small modular backend.
 
-The current backend can now:
+Current flow:
 
 ```text
-Receive validated requests
-        ↓
-Create persistent jobs
-        ↓
-Generate resource IDs
-        ↓
-Expose typed responses
-        ↓
-Retrieve stored resources
-        ↓
-Update job state
-        ↓
-Reject invalid lifecycle values
-        ↓
-Delete resources
-        ↓
-Return meaningful HTTP errors
+Validated Client Request
+          ↓
+       Router
+          ↓
+   Job Operation
+          ↓
+   JSON Storage Layer
+          ↓
+  Persistent Job State
+          ↓
+ Response Model Validation
+          ↓
+        Client
 ```
 
-The next phase will gradually move the application from a single-file JSON-backed backend toward a **cleaner modular architecture and database-backed implementation**.
+The next major progression will continue improving the modular design before moving persistence from JSON files to a real **PostgreSQL-backed data layer**.
 
 ---
 
@@ -1054,4 +1433,4 @@ The next phase will gradually move the application from a single-file JSON-backe
 
 🚧 **Actively under development**
 
-The backend is intentionally developed incrementally. Each new layer is introduced only after the previous concepts are implemented and understood.
+The backend is being developed incrementally with emphasis on understanding each engineering decision rather than rapidly assembling a large framework-heavy application.
