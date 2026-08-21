@@ -4,7 +4,7 @@ from typing import Dict
 
 from schemas import JobCreate, JobResponse, JobUpdate, JobActionResponse
 from storage import load_data, dump_data   
-from services import get_job_by_id,get_all_jobs,create_job
+from services import get_job_by_id,get_all_jobs,create_job,update_job_status,delete_job_by_id
 
 router = APIRouter(
     prefix="/jobs",
@@ -32,40 +32,27 @@ def get_job(job_id:int):
     
       
 
-@router.delete("/{job_id}")
+@router.delete("/{job_id}",status_code = status.HTTP_200_OK)
 def delete_job(job_id: int):
-    data = load_data()
-
-    if str(job_id) in data:
-        del data[str(job_id)]
+    if delete_job_by_id(job_id):
+        return {"message":"Successfully Deleted ID"}
     else:
         raise HTTPException(
-            detail="Id Not Found",
-            status_code=status.HTTP_404_NOT_FOUND
+            detail ="Job Id Not Found",
+            status_code = status.HTTP_404_NOT_FOUND
         )
 
-    dump_data(data)
-
-    return {"message": "Succesfully Deleted"}    
-
-@router.patch("/{job_id}", response_model=JobActionResponse)
+@router.patch("/{job_id}", response_model=JobActionResponse,status_code = status.HTTP_200_OK)
 def update_status(job_id: int, x: JobUpdate):
-    data = load_data()
-
-    if str(job_id) in data:
-        data[str(job_id)]["status"] = x.status
-        message = data[str(job_id)]
-
-    else:
+    Updated_data = update_job_status(job_id,x.status)
+    if not Updated_data:
         raise HTTPException(
-            detail="Id Not Found",
-            status_code=status.HTTP_404_NOT_FOUND
+            detail = "Job ID Not Found",
+            status_code= status.HTTP_404_NOT_FOUND       
         )
-
-    dump_data(data)
-
-    return {
-        "message": "Job updated successfully",
-        "job": message
-    }
+    else:
+        return {"message" : "Successfully Updated",
+                "job": Updated_data
+                }    
+        
     

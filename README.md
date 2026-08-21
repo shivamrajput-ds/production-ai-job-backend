@@ -220,6 +220,8 @@ The service layer has started with functions for operations such as:
 get_job_by_id()
 get_all_jobs()
 create_job()
+update_job_status()
+delete_job_by_id()
 ```
 
 Current responsibilities include:
@@ -1397,8 +1399,8 @@ http://127.0.0.1:8000/redoc
 * [x] Service-based job retrieval
 * [x] Service-based job listing
 * [x] Service-based job creation
-* [ ] Move PATCH logic into service layer
-* [ ] Move DELETE logic into service layer
+* [x] Move PATCH logic into service layer
+* [x] Move DELETE logic into service layer
 * [ ] Repository/data-access layer
 * [ ] Central configuration
 * [ ] Application package structure
