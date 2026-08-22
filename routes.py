@@ -3,8 +3,8 @@ from fastapi import APIRouter, status, HTTPException
 from typing import Dict
 
 from schemas import JobCreate, JobResponse, JobUpdate, JobActionResponse
-from storage import load_data, dump_data   
 from services import get_job_by_id,get_all_jobs,create_job,update_job_status,delete_job_by_id
+from typing import Literal
 
 router = APIRouter(
     prefix="/jobs",
@@ -18,8 +18,8 @@ def create_jobs(job:JobCreate):
         
     
 @router.get("/",response_model= Dict[str,JobResponse],status_code = status.HTTP_200_OK)
-def get_jobs():
-    data = get_all_jobs()
+def get_jobs(status: Literal["pending", "running", "completed", "failed"] | None = None)-> dict:
+    data = get_all_jobs(status)
     return data
     
 
